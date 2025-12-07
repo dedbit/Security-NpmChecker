@@ -1,0 +1,93 @@
+PS E:\dev\12C\TestProjects\Security-NpmChecker\ShaiHuludChecker> .\Run-ShaiHuludScanner.ps1
+
+cmdlet Run-ShaiHuludScanner.ps1 at command pipeline position 1
+Supply values for the following parameters:
+ScanRootPath: e:\dev\
++==========================================================================+
+|                                                                          |
+|    ____  _           _       _   _       _           _   ____    ___     |
+|   / ___|| |__   __ _(_)     | | | |_   _| |_   _  __| | |___ \  / _ \    |
+|   \___ \| '_ \ / _` | |_____| |_| | | | | | | | |/ _` |   __) || | | |   |
+|    ___) | | | | (_| | |_____|  _  | |_| | | |_| | (_| |  / __/ | |_| |   |
+|   |____/|_| |_|\__,_|_|     |_| |_|\__,_|_|\__,_|\__,_| |_____(_)___/    |
+|   / ___|  ___ __ _ _ __  _ __   ___ _ __                                 |
+|   \___ \ / __/ _` | '_ \| '_ \ / _ \ '__|                                |
+|    ___) | (_| (_| | | | | | | |  __/ |                                   |
+|   |____/ \___\__,_|_| |_|_| |_|\___|_|                                   |
+|                                                                          |
++==========================================================================+
+
++-----------------+
+|   INFORMATION   |
++-----------------+
+
+Version: 1.1
+
+[ Notes & disclaimers ]
+  - Scanner aims to aid in detecting Shai-Hulud 2.0 infections or exposure in a given environment.
+  - Scanning of multiple paths, locally or in containers, is recommended for better coverage.
+  - No guarantees of detection or false positives/negatives are made - this is a best-effort attempt.
+  - Always review the scan results manually and take appropriate actions based on organization policies.
+
+[ Scan includes ]
+  - Existence of known malicious files: bun_environment.js, setup_bun.js
+  - Infections in package.json by looking for preinstall script: 'node setup_bun.js'
+  - References to known affected npm packages in packages.json files
+  - Installed npm packages by scanning node_modules folders
+     - Including global npm packages and NVM managed versions if applicable (skippable with script switch)
+  - Traces of Trufflehog tool in user's home directory
+
+[ References & more information ]
+  - https://securitylabs.datadoghq.com/articles/shai-hulud-2.0-npm-worm
+  - https://www.aikido.dev/blog/shai-hulud-strikes-again-hitting-zapier-ensdomains
+  - https://about.gitlab.com/blog/gitlab-discovers-widespread-npm-supply-chain-attack
+
+Press any key to start scanning...
+
++----------------------+
+|   SCANNING PROCESS   |
++----------------------+
+
+Checking for Trufflehog program which is part of the credentials steeling process... completed
+No trufflehog cache folder found in user's home directory.
+
+Downloading list of known affected npm packages from https://raw.githubusercontent.com/DataDog/indicators-of-compromise/refs/heads/main/shai-hulud-2.0/consolidated_iocs.csv ... completed
+List included 795 npm packages.
+
+Note:
+Scanning may take a while depending on the size of the target path and number of files.
+Example scanning developer folder with >70k package.json files took ~60 minutes.
+
+Searching for files recursively in "E:\dev\"... completed
+Found 28837 target files.
+
+BEGIN: File scan - E:\dev\
+WARNING: File with reference to known compromised npm package found: E:\dev\12C\TestProjects\Spfx2\node_modules\get-them-args\package.json | Package: get-them-args
+WARNING: package.json file located in folder matching known compromised npm package found: E:\dev\12C\TestProjects\Spfx2\node_modules\get-them-args\package.json | Package: get-them-args
+WARNING: File with reference to known compromised npm package found: E:\dev\12C\TestProjects\Spfx2\node_modules\kill-port\package.json | Package: get-them-args
+WARNING: File with reference to known compromised npm package found: E:\dev\12C\TestProjects\Spfx2\node_modules\kill-port\package.json | Package: kill-port
+WARNING: package.json file located in folder matching known compromised npm package found: E:\dev\12C\TestProjects\Spfx2\node_modules\kill-port\package.json | Package: kill-port
+WARNING: File with reference to known compromised npm package found: E:\dev\12C\TestProjects\Spfx2\node_modules\kill-port\package.json | Package: shell-exec
+WARNING: File with reference to known compromised npm package found: E:\dev\12C\TestProjects\Spfx2\node_modules\shell-exec\package.json | Package: shell-exec
+WARNING: package.json file located in folder matching known compromised npm package found: E:\dev\12C\TestProjects\Spfx2\node_modules\shell-exec\package.json | Package: shell-exec
+WARNING: File with reference to known compromised npm package found: E:\dev\12C\TestProjects\Spfx2\node_modules\spfx-fast-serve-helpers\package.json | Package: kill-port
+END: File scan - E:\dev\
+
+Searching for files recursively in "C:\Users\newsl\AppData\Roaming\npm\node_modules"... completed
+Found 2431 target files.
+
+BEGIN: File scan - C:\Users\newsl\AppData\Roaming\npm\node_modules
+END: File scan - C:\Users\newsl\AppData\Roaming\npm\node_modules
+
++------------+
+|   REPORT   |
++------------+
+
+!!! WARNING: References to known compromised npm packages found !!!
+Above findings does not necessarily mean infection is pending, but it should be investigated and references should be locked to known safe versions.
+Please review the scan report for details and compare referenced package versions with list of known compromised versions.
+
+Scan report saved to: E:\dev\12C\TestProjects\Security-NpmChecker\ShaiHuludChecker\ScanReports\20251206_220905
+
+Scan completed in 00:17:30.7716910.
+

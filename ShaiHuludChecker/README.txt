@@ -26,3 +26,13 @@ https://orangoab-my.sharepoint.com/:f:/g/personal/mattias_uldin_fellowmind_se/Ig
 CONTACT:
 
 mattias.uldin@fellowmind.se
+
+
+# Filip Notes
+
+Suspicious packages data source:
+https://raw.githubusercontent.com/DataDog/indicators-of-compromise/refs/heads/main/shai-hulud-2.0/consolidated_iocs.csv
+
+## References
+
+https://securitylabs.datadoghq.com/articles/shai-hulud-2.0-npm-worm/

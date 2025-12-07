@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.1
+.VERSION 1.2
 
 .GUID 38d58180-9315-4919-a3be-59329e0ad445
 
@@ -150,28 +150,75 @@ function Test-File {
         Write-Verbose "Checking for known compromised npm packages in $filePath"
         foreach ($knownCompromisedNpmPackage in $Script:knownCompromisedNpmPackages) {
             $packageName = $knownCompromisedNpmPackage.package_name
+            $maliciousVersions = $knownCompromisedNpmPackage.package_versions
 
             # Check for package name in the file content
             if ($content -like "*`"$packageName`"*") {
-                Write-Warning "File with reference to known compromised npm package found: $filePath | Package: $packageName"
+                # Try to extract the version from the package.json
+                $installedVersion = $null
+                try {
+                    $packageJson = $content | ConvertFrom-Json -ErrorAction SilentlyContinue
+                    if ($packageJson) {
+                        $installedVersion = $packageJson.version
+                    }
+                } catch {
+                    Write-Verbose "Could not parse JSON from $filePath"
+                }
+
+                # Check if installed version matches any known malicious versions
+                $versionWarning = ""
+                if ($installedVersion) {
+                    if ($maliciousVersions -split ", " | Where-Object { $_ -eq $installedVersion }) {
+                        $versionWarning = " | INSTALLED VERSION $installedVersion MATCHES KNOWN MALICIOUS VERSION"
+                        Write-Warning "File with reference to known compromised npm package found (MALICIOUS VERSION DETECTED): $filePath | Package: $packageName | Version: $installedVersion | Known malicious versions: $maliciousVersions"
+                    } else {
+                        Write-Warning "File with reference to known compromised npm package found: $filePath | Package: $packageName | Version: $installedVersion (Safe - different from malicious: $maliciousVersions)"
+                    }
+                } else {
+                    Write-Warning "File with reference to known compromised npm package found: $filePath | Package: $packageName | Version: (unable to determine)"
+                }
+                
                 $script:report.NpmPackageWarnings += [PSCustomObject]@{
                     FilePath = $filePath;
                     Reason = "Reference to known compromised npm package found";
                     NpmPackageName = $packageName;
-                    NpmPackageCurrentVersion = "(not supported yet - check manually)";
-                    NpmPackageKnownMaliciousVersions = $knownCompromisedNpmPackage.package_versions
+                    NpmPackageCurrentVersion = $installedVersion ?? "(unable to determine)";
+                    NpmPackageKnownMaliciousVersions = $maliciousVersions;
+                    VersionMatch = if ($installedVersion -and ($maliciousVersions -split ", " | Where-Object { $_ -eq $installedVersion })) { "YES - MALICIOUS" } else { "NO - Safe" }
                 }
             }
 
             # Check if the package.json file is located in a folder matching the package name
             if ($File.Directory.FullName.Replace("\", "/") -like "*/$packageName") {
-                Write-Warning "package.json file located in folder matching known compromised npm package found: $filePath | Package: $packageName"
+                # Try to extract the version from the package.json
+                $installedVersion = $null
+                try {
+                    $packageJson = $content | ConvertFrom-Json -ErrorAction SilentlyContinue
+                    if ($packageJson) {
+                        $installedVersion = $packageJson.version
+                    }
+                } catch {
+                    Write-Verbose "Could not parse JSON from $filePath"
+                }
+
+                # Check if installed version matches any known malicious versions
+                if ($installedVersion) {
+                    if ($maliciousVersions -split ", " | Where-Object { $_ -eq $installedVersion }) {
+                        Write-Warning "package.json file located in folder matching known compromised npm package found (MALICIOUS VERSION DETECTED): $filePath | Package: $packageName | Version: $installedVersion | Known malicious versions: $maliciousVersions"
+                    } else {
+                        Write-Warning "package.json file located in folder matching known compromised npm package found: $filePath | Package: $packageName | Version: $installedVersion (Safe - different from malicious: $maliciousVersions)"
+                    }
+                } else {
+                    Write-Warning "package.json file located in folder matching known compromised npm package found: $filePath | Package: $packageName | Version: (unable to determine)"
+                }
+                
                 $script:report.NpmPackageWarnings += [PSCustomObject]@{
                     FilePath = $filePath;
                     Reason = "package.json located in folder matching known compromised npm package";
                     NpmPackageName = $packageName;
-                    NpmPackageCurrentVersion = "(not supported yet - check manually)";
-                    NpmPackageKnownMaliciousVersions = $knownCompromisedNpmPackage.package_versions
+                    NpmPackageCurrentVersion = $installedVersion ?? "(unable to determine)";
+                    NpmPackageKnownMaliciousVersions = $maliciousVersions;
+                    VersionMatch = if ($installedVersion -and ($maliciousVersions -split ", " | Where-Object { $_ -eq $installedVersion })) { "YES - MALICIOUS" } else { "NO - Safe" }
                 }
             }
         }
