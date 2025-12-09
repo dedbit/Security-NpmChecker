@@ -296,10 +296,10 @@ Write-Host "  - https://www.aikido.dev/blog/shai-hulud-strikes-again-hitting-zap
 Write-Host "  - https://about.gitlab.com/blog/gitlab-discovers-widespread-npm-supply-chain-attack"
 Write-Host
 
-Write-Host -NoNewLine "Press any key to start scanning... ";
-$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
-Write-Host
-Write-Host
+# Write-Host -NoNewLine "Press any key to start scanning... ";
+# $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
+# Write-Host
+# Write-Host
 
 Write-Host "+----------------------+" -ForegroundColor Magenta
 Write-Host "|   SCANNING PROCESS   |" -ForegroundColor Magenta
@@ -411,3 +411,18 @@ if ($mayBeSafe) {
 Write-Host "Scan report saved to: $($reportFolder.FullName)"
 Write-Host
 Write-Host "Scan completed in $($report.ScanInformation.ScanDuration)."
+
+# Return exit code based on findings
+if ($report.ScanInformation.InfectedFilesFound -gt 0) {
+    exit 2  # Critical: Infected files found
+}
+if ($report.ScanInformation.SuspectedFilesFound -gt 0) {
+    exit 3  # Critical: Suspected malicious files found
+}
+if ($report.ScanInformation.NpmPackageWarningsFound -gt 0) {
+    exit 1  # Warning: Compromised packages referenced
+}
+if ($report.ScanInformation.TrufflehogFound) {
+    exit 4  # Warning: Trufflehog detected
+}
+exit 0  # Clean scan

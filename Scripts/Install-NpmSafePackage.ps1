@@ -47,13 +47,7 @@ function Get-SkippedScripts {
         } catch {}
     }
     
-    if ($packagesWithScripts.Count -gt 0) {
-        Write-Host "`n⚠ Found $($packagesWithScripts.Count) package(s) with skipped lifecycle scripts:" -ForegroundColor Yellow
-        $packagesWithScripts | Format-Table -AutoSize
-        Write-Host "To run scripts after verification: npm rebuild <package-name>`n" -ForegroundColor Yellow
-    } else {
-        Write-Host "No packages with lifecycle scripts detected.`n" -ForegroundColor Green
-    }
+    return $packagesWithScripts
 }
 
 $ProjectPath = (Resolve-Path $ProjectPath).Path
@@ -69,12 +63,22 @@ if (-not $SkipScanner) {
     if (Test-Path $scannerPath) {
         Write-Host "`nRunning pre-installation security scan..." -ForegroundColor Magenta
         & $scannerPath -ScanRootPath $ProjectPath -SkipGlobalNpmPackagesScan
+        $scanExitCode = $LASTEXITCODE
         
-        Write-Host "`nPre-scan complete. Continue with installation? (Y/n): " -NoNewline -ForegroundColor Yellow
-        $response = Read-Host
-        if ($response -eq "n") {
-            Write-Host "Installation cancelled by user." -ForegroundColor Red
-            exit 1
+        # Exit codes: 0=clean, 1=warnings, 2=infected, 3=suspected, 4=trufflehog
+        if ($scanExitCode -eq 2 -or $scanExitCode -eq 3) {
+            Write-Host "`n!!! CRITICAL: Scanner detected infections or suspected malicious files !!!" -ForegroundColor Red
+            Write-Host "Installation ABORTED for safety." -ForegroundColor Red
+            exit $scanExitCode
+        }
+        
+        if ($scanExitCode -eq 1 -or $scanExitCode -eq 4) {
+            Write-Host "`nWarnings detected. Continue with installation? (y/N): " -NoNewline -ForegroundColor Yellow
+            $response = Read-Host
+            if ($response -ne "y") {
+                Write-Host "Installation cancelled by user." -ForegroundColor Red
+                exit 1
+            }
         }
     } else {
         Write-Warning "Scanner not found at: $scannerPath"
@@ -103,7 +107,7 @@ try {
         
         # Scan for packages with skipped scripts
         Write-Host "`nScanning for packages with skipped lifecycle scripts..." -ForegroundColor Cyan
-        Get-SkippedScripts -NodeModulesPath "node_modules"
+        $skippedPackages = Get-SkippedScripts -NodeModulesPath "node_modules"
         
         # Run post-installation security scan
         if (-not $SkipScanner) {
@@ -111,12 +115,43 @@ try {
             if (Test-Path $scannerPath) {
                 Write-Host "`nRunning post-installation security scan..." -ForegroundColor Magenta
                 & $scannerPath -ScanRootPath $ProjectPath -SkipGlobalNpmPackagesScan
-                Write-Host "`n⚠ REVIEW SCANNER RESULTS ABOVE before running any npm scripts!" -ForegroundColor Yellow
+                $scanExitCode = $LASTEXITCODE
+                
+                # Exit codes: 0=clean, 1=warnings, 2=infected, 3=suspected, 4=trufflehog
+                if ($scanExitCode -eq 2 -or $scanExitCode -eq 3) {
+                    Write-Host "`n!!! CRITICAL: Newly installed packages contain infections or malicious files !!!" -ForegroundColor Red
+                    Write-Host "Do NOT run npm rebuild or any lifecycle scripts!" -ForegroundColor Red
+                    Write-Host "Review scan results and remove compromised packages immediately." -ForegroundColor Red
+                    exit $scanExitCode
+                } elseif ($scanExitCode -eq 1 -or $scanExitCode -eq 4) {
+                    Write-Host "`n⚠ WARNING: Scanner detected issues. Review results above carefully!" -ForegroundColor Yellow
+                } else {
+                    Write-Host "`n✓ Post-installation scan clean" -ForegroundColor Green
+                }
             } else {
                 Write-Warning "Scanner not found - Install security may be compromised!"
             }
         } else {
             Write-Warning "Security scanner was skipped - Install has not been validated!"
+        }
+        
+        # Final summary about skipped scripts
+        Write-Host "`n" + ("=" * 70) -ForegroundColor Cyan
+        Write-Host "INSTALLATION SUMMARY" -ForegroundColor Cyan
+        Write-Host ("=" * 70) -ForegroundColor Cyan
+        
+        if ($skippedPackages.Count -gt 0) {
+            Write-Host "`n⚠ PACKAGES WITH SKIPPED LIFECYCLE SCRIPTS ($($skippedPackages.Count)):" -ForegroundColor Yellow
+            $skippedPackages | Format-Table Package, Version, Scripts -AutoSize
+            
+            Write-Host "These packages had their install scripts blocked for security." -ForegroundColor Yellow
+            Write-Host "Some packages (native modules, puppeteer, etc.) may not work without them.`n" -ForegroundColor Yellow
+            
+            Write-Host "TO RUN SCRIPTS AFTER VERIFYING THEY ARE SAFE:" -ForegroundColor Green
+            Write-Host "  • Single package:  npm rebuild <package-name>" -ForegroundColor White
+            Write-Host "  • All packages:    npm rebuild`n" -ForegroundColor White
+        } else {
+            Write-Host "`n✓ No packages with lifecycle scripts detected." -ForegroundColor Green
         }
     } else {
         Write-Error "npm install failed with exit code: $LASTEXITCODE"
