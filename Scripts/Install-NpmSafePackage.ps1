@@ -63,6 +63,29 @@ if (-not (Test-Path (Join-Path $ProjectPath "package.json"))) {
     exit 1
 }
 
+# Run pre-installation security scan
+if (-not $SkipScanner) {
+    $scannerPath = Join-Path (Split-Path -Parent $PSScriptRoot) "ShaiHuludChecker\Run-ShaiHuludScanner.ps1"
+    if (Test-Path $scannerPath) {
+        Write-Host "`nRunning pre-installation security scan..." -ForegroundColor Magenta
+        & $scannerPath -ScanRootPath $ProjectPath -SkipGlobalNpmPackagesScan
+        
+        Write-Host "`nPre-scan complete. Continue with installation? (Y/n): " -NoNewline -ForegroundColor Yellow
+        $response = Read-Host
+        if ($response -eq "n") {
+            Write-Host "Installation cancelled by user." -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        Write-Warning "Scanner not found at: $scannerPath"
+        Write-Host "Continue without pre-scan? (y/N): " -NoNewline -ForegroundColor Yellow
+        $response = Read-Host
+        if ($response -ne "y") {
+            exit 1
+        }
+    }
+}
+
 Write-Host "`nInstalling packages with --ignore-scripts (prevents malicious preinstall/postinstall scripts)" -ForegroundColor Yellow
 
 $npmArgs = @("install", "--ignore-scripts")
@@ -82,15 +105,18 @@ try {
         Write-Host "`nScanning for packages with skipped lifecycle scripts..." -ForegroundColor Cyan
         Get-SkippedScripts -NodeModulesPath "node_modules"
         
-        # Run security scanner if not skipped
+        # Run post-installation security scan
         if (-not $SkipScanner) {
             $scannerPath = Join-Path (Split-Path -Parent $PSScriptRoot) "ShaiHuludChecker\Run-ShaiHuludScanner.ps1"
             if (Test-Path $scannerPath) {
-                Write-Host "`nRunning security scanner..." -ForegroundColor Magenta
+                Write-Host "`nRunning post-installation security scan..." -ForegroundColor Magenta
                 & $scannerPath -ScanRootPath $ProjectPath -SkipGlobalNpmPackagesScan
+                Write-Host "`n⚠ REVIEW SCANNER RESULTS ABOVE before running any npm scripts!" -ForegroundColor Yellow
             } else {
-                Write-Warning "Scanner not found at: $scannerPath"
+                Write-Warning "Scanner not found - Install security may be compromised!"
             }
+        } else {
+            Write-Warning "Security scanner was skipped - Install has not been validated!"
         }
     } else {
         Write-Error "npm install failed with exit code: $LASTEXITCODE"
