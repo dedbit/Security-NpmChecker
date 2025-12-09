@@ -50,6 +50,46 @@ function Get-SkippedScripts {
     return $packagesWithScripts
 }
 
+function Invoke-SecurityScan {
+    param(
+        [string]$ScannerPath,
+        [string]$ProjectPath,
+        [string]$ScanType  # "pre" or "post"
+    )
+    
+    Write-Host "`nRunning $ScanType-installation security scan..." -ForegroundColor Magenta
+    & $ScannerPath -ScanRootPath $ProjectPath -SkipGlobalNpmPackagesScan
+    $scanExitCode = $LASTEXITCODE
+    
+    # Exit codes: 0=clean, 1=warnings, 2=infected, 3=suspected, 4=trufflehog
+    if ($scanExitCode -eq 2 -or $scanExitCode -eq 3) {
+        if ($ScanType -eq "pre") {
+            Write-Host "`n!!! CRITICAL: Scanner detected infections or suspected malicious files !!!" -ForegroundColor Red
+            Write-Host "Installation ABORTED for safety." -ForegroundColor Red
+        } else {
+            Write-Host "`n!!! CRITICAL: Newly installed packages contain infections or malicious files !!!" -ForegroundColor Red
+            Write-Host "Do NOT run npm rebuild or any lifecycle scripts!" -ForegroundColor Red
+            Write-Host "Review scan results and remove compromised packages immediately." -ForegroundColor Red
+        }
+        exit $scanExitCode
+    }
+    
+    if ($scanExitCode -eq 1 -or $scanExitCode -eq 4) {
+        if ($ScanType -eq "pre") {
+            Write-Host "`nWarnings detected. Continue with installation? (y/N): " -NoNewline -ForegroundColor Yellow
+            $response = Read-Host
+            if ($response -ne "y") {
+                Write-Host "Installation cancelled by user." -ForegroundColor Red
+                exit 1
+            }
+        } else {
+            Write-Host "`n⚠ WARNING: Scanner detected issues. Review results above carefully!" -ForegroundColor Yellow
+        }
+    } elseif ($ScanType -eq "post") {
+        Write-Host "`n✓ Post-installation scan clean" -ForegroundColor Green
+    }
+}
+
 $ProjectPath = (Resolve-Path $ProjectPath).Path
 
 if (-not (Test-Path (Join-Path $ProjectPath "package.json"))) {
@@ -61,25 +101,7 @@ if (-not (Test-Path (Join-Path $ProjectPath "package.json"))) {
 if (-not $SkipScanner) {
     $scannerPath = Join-Path (Split-Path -Parent $PSScriptRoot) "ShaiHuludChecker\Run-ShaiHuludScanner.ps1"
     if (Test-Path $scannerPath) {
-        Write-Host "`nRunning pre-installation security scan..." -ForegroundColor Magenta
-        & $scannerPath -ScanRootPath $ProjectPath -SkipGlobalNpmPackagesScan
-        $scanExitCode = $LASTEXITCODE
-        
-        # Exit codes: 0=clean, 1=warnings, 2=infected, 3=suspected, 4=trufflehog
-        if ($scanExitCode -eq 2 -or $scanExitCode -eq 3) {
-            Write-Host "`n!!! CRITICAL: Scanner detected infections or suspected malicious files !!!" -ForegroundColor Red
-            Write-Host "Installation ABORTED for safety." -ForegroundColor Red
-            exit $scanExitCode
-        }
-        
-        if ($scanExitCode -eq 1 -or $scanExitCode -eq 4) {
-            Write-Host "`nWarnings detected. Continue with installation? (y/N): " -NoNewline -ForegroundColor Yellow
-            $response = Read-Host
-            if ($response -ne "y") {
-                Write-Host "Installation cancelled by user." -ForegroundColor Red
-                exit 1
-            }
-        }
+        Invoke-SecurityScan -ScannerPath $scannerPath -ProjectPath $ProjectPath -ScanType "pre"
     } else {
         Write-Warning "Scanner not found at: $scannerPath"
         Write-Host "Continue without pre-scan? (y/N): " -NoNewline -ForegroundColor Yellow
@@ -113,21 +135,7 @@ try {
         if (-not $SkipScanner) {
             $scannerPath = Join-Path (Split-Path -Parent $PSScriptRoot) "ShaiHuludChecker\Run-ShaiHuludScanner.ps1"
             if (Test-Path $scannerPath) {
-                Write-Host "`nRunning post-installation security scan..." -ForegroundColor Magenta
-                & $scannerPath -ScanRootPath $ProjectPath -SkipGlobalNpmPackagesScan
-                $scanExitCode = $LASTEXITCODE
-                
-                # Exit codes: 0=clean, 1=warnings, 2=infected, 3=suspected, 4=trufflehog
-                if ($scanExitCode -eq 2 -or $scanExitCode -eq 3) {
-                    Write-Host "`n!!! CRITICAL: Newly installed packages contain infections or malicious files !!!" -ForegroundColor Red
-                    Write-Host "Do NOT run npm rebuild or any lifecycle scripts!" -ForegroundColor Red
-                    Write-Host "Review scan results and remove compromised packages immediately." -ForegroundColor Red
-                    exit $scanExitCode
-                } elseif ($scanExitCode -eq 1 -or $scanExitCode -eq 4) {
-                    Write-Host "`n⚠ WARNING: Scanner detected issues. Review results above carefully!" -ForegroundColor Yellow
-                } else {
-                    Write-Host "`n✓ Post-installation scan clean" -ForegroundColor Green
-                }
+                Invoke-SecurityScan -ScannerPath $scannerPath -ProjectPath $ProjectPath -ScanType "post"
             } else {
                 Write-Warning "Scanner not found - Install security may be compromised!"
             }
