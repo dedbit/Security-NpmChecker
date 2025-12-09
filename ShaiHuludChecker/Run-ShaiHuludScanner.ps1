@@ -26,8 +26,8 @@
     - PowerShell 7.5.0 on Ubuntu 24.04.1 LTS
 #>
 Param(
-    [Parameter(Mandatory=$true, Position=0)]
-    [string]$ScanRootPath,
+    [Parameter(Mandatory=$false, Position=0)]
+    [string]$ScanRootPath = (Get-Location).Path,
 
     [switch]$SkipGlobalNpmPackagesScan
 )
