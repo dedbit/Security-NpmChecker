@@ -84,7 +84,7 @@ $userHomePath = [Environment]::GetFolderPath("UserProfile")
 $packageScanPatterns = @("node setup_bun.js") # Pattern indicating infection in package.json by adding the pattern as a preinstall script
 $knownMaliciousFiles = @("bun_environment.js", "setup_bun.js") # Known malicious file names used by the Shai-Hulud 2.0 infection
 $filesOfInterestNames = @("package.json") + $knownMaliciousFiles
-$trufflehogInUserHomePath = ".truffler-cache"
+$trufflehogCacheFolders = @(".trufflehog", ".trufflehog-cache", ".truffler-cache") # Possible Trufflehog cache folder names
 
 # Report object to store scan results
 $report = [PSCustomObject]@{
@@ -307,15 +307,24 @@ Write-Host "+----------------------+" -ForegroundColor Magenta
 Write-Host
 
 # Checking for trufflehog cache folder in user's home directory
-$trufflehogCacheFolderPath = Join-Path -Path $userHomePath -ChildPath $trufflehogInUserHomePath
+Write-Host "Checking for Trufflehog program which is part of the credentials stealing process... " -NoNewline
+$trufflehogFound = $false
+$foundPaths = @()
+foreach ($folderName in $trufflehogCacheFolders) {
+    $trufflehogCacheFolderPath = Join-Path -Path $userHomePath -ChildPath $folderName
 Write-Verbose "Checking for trufflehog cache folder at: $trufflehogCacheFolderPath"
-Write-Host "Checking for Trufflehog program which is part of the credentials steeling process... " -NoNewline
 if (Test-Path -Path $trufflehogCacheFolderPath -PathType Container) {
+        $trufflehogFound = $true
+        $foundPaths += $trufflehogCacheFolderPath
+    }
+}
     Write-Host "completed"
-    Write-Warning "Suspected trufflehog cache folder found: $trufflehogCacheFolderPath"
+if ($trufflehogFound) {
+    foreach ($path in $foundPaths) {
+        Write-Warning "Suspected trufflehog cache folder found: $path"
+    }
     $script:report.ScanInformation.TrufflehogFound = $true
 } else {
-    Write-Host "completed"
     Write-Host "No trufflehog cache folder found in user's home directory."
     $script:report.ScanInformation.TrufflehogFound = $false
 }
