@@ -44,10 +44,10 @@ if (-not (Test-Path -Path $ScanRootPath)) {
 $globalNpmNodeModulesPath = $null
 $nvmNodeVersionsPath = $null
 if (-not $SkipGlobalNpmPackagesScan) {
-    $globalNpmNodeModulesPath = $null
+
     try {
         $globalNpmNodeModulesPath = (npm root -g)
-    }catch {
+    } catch {
         Write-Error "npm is not installed or not found in PATH. Cannot scan global npm packages."
         Write-Host "You can skip scanning global npm packages by using the -SkipGlobalNpmPackagesScan switch."
         exit 1
@@ -154,22 +154,31 @@ function Test-File {
 
             # Check for package name in the file content
             if ($content -like "*`"$packageName`"*") {
-                # Try to extract the version from the package.json
+                # Try to extract the version from the dependencies/devDependencies
                 $installedVersion = $null
                 try {
                     $packageJson = $content | ConvertFrom-Json -ErrorAction SilentlyContinue
                     if ($packageJson) {
-                        $installedVersion = $packageJson.version
+                        # Check dependencies first, then devDependencies
+                        if ($packageJson.dependencies -and $packageJson.dependencies.PSObject.Properties[$packageName]) {
+                            $installedVersion = $packageJson.dependencies.$packageName
+                        }
+                        elseif ($packageJson.devDependencies -and $packageJson.devDependencies.PSObject.Properties[$packageName]) {
+                            $installedVersion = $packageJson.devDependencies.$packageName
+                        }
                     }
                 } catch {
                     Write-Verbose "Could not parse JSON from $filePath"
                 }
 
                 # Check if installed version matches any known malicious versions
-                $versionWarning = ""
+                $isVersionMalicious = $false
                 if ($installedVersion) {
-                    if ($maliciousVersions -split ", " | Where-Object { $_ -eq $installedVersion }) {
-                        $versionWarning = " | INSTALLED VERSION $installedVersion MATCHES KNOWN MALICIOUS VERSION"
+                    # Remove version range indicators (^, ~, >=, etc.) for comparison
+                    $cleanVersion = $installedVersion -replace '[^\d\.]', ''
+                    $isVersionMalicious = $maliciousVersions -split ", " | Where-Object { $_ -eq $cleanVersion }
+                    
+                    if ($isVersionMalicious) {
                         Write-Warning "File with reference to known compromised npm package found (MALICIOUS VERSION DETECTED): $filePath | Package: $packageName | Version: $installedVersion | Known malicious versions: $maliciousVersions"
                     } else {
                         Write-Warning "File with reference to known compromised npm package found: $filePath | Package: $packageName | Version: $installedVersion (Safe - different from malicious: $maliciousVersions)"
@@ -184,7 +193,7 @@ function Test-File {
                     NpmPackageName = $packageName;
                     NpmPackageCurrentVersion = $installedVersion ?? "(unable to determine)";
                     NpmPackageKnownMaliciousVersions = $maliciousVersions;
-                    VersionMatch = if ($installedVersion -and ($maliciousVersions -split ", " | Where-Object { $_ -eq $installedVersion })) { "YES - MALICIOUS" } else { "NO - Safe" }
+                    VersionMatch = if ($isVersionMalicious) { "YES - MALICIOUS" } else { "NO - Safe" }
                 }
             }
 
@@ -202,8 +211,13 @@ function Test-File {
                 }
 
                 # Check if installed version matches any known malicious versions
+                $isVersionMalicious = $false
                 if ($installedVersion) {
-                    if ($maliciousVersions -split ", " | Where-Object { $_ -eq $installedVersion }) {
+                    # Remove version range indicators (^, ~, >=, etc.) for comparison
+                    $cleanVersion = $installedVersion -replace '[^\d\.]', ''
+                    $isVersionMalicious = $maliciousVersions -split ", " | Where-Object { $_ -eq $cleanVersion }
+                    
+                    if ($isVersionMalicious) {
                         Write-Warning "package.json file located in folder matching known compromised npm package found (MALICIOUS VERSION DETECTED): $filePath | Package: $packageName | Version: $installedVersion | Known malicious versions: $maliciousVersions"
                     } else {
                         Write-Warning "package.json file located in folder matching known compromised npm package found: $filePath | Package: $packageName | Version: $installedVersion (Safe - different from malicious: $maliciousVersions)"
@@ -218,7 +232,7 @@ function Test-File {
                     NpmPackageName = $packageName;
                     NpmPackageCurrentVersion = $installedVersion ?? "(unable to determine)";
                     NpmPackageKnownMaliciousVersions = $maliciousVersions;
-                    VersionMatch = if ($installedVersion -and ($maliciousVersions -split ", " | Where-Object { $_ -eq $installedVersion })) { "YES - MALICIOUS" } else { "NO - Safe" }
+                    VersionMatch = if ($isVersionMalicious) { "YES - MALICIOUS" } else { "NO - Safe" }
                 }
             }
         }
